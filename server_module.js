@@ -2,7 +2,13 @@ const http = require('http');
 const url = require('url');
 const fs = require('fs');
 const mp = require('multiparty');
+const qs = require('querystring');
 const Stat = require('D://Study/PSCP/lr_7/m07-01')('D://Study/PSCP/lr_8/');
+const Json = require('./json_module');
+const crJs = require('./createJson_module');
+const XML =  require('./xml_module');
+const crXML =  require('./XMLHandler_module');
+const parseString = require('xml2js').parseString;
 
 const dir = './files/';
 
@@ -137,20 +143,69 @@ let get_handler = (req, res) => {
 let post_handler = (req, res) => {
     let path = url.parse(req.url).pathname;
     switch(true) {
-        case path === '/upload':
+        case path === '/upload': {
             let form = new mp.Form({uploadDir: './files'});
             form.on('file', (name, file) => {
-               fs.copyFile(name, form.uploadDir, () => {console.log('File is copied.');});
+                fs.copyFile(name, form.uploadDir, () => {
+                    console.log('File is copied.');
+                });
             });
             form.parse(req);
             let result = '';
-            req.on('data', (data) => {result += data;});
+            req.on('data', (data) => {
+                result += data;
+            });
             req.on('end', () => {
-                res.writeHead(200, {'Content-Type':'text/html; charset=utf-8'});
+                res.writeHead(200, {'Content-Type': 'text/html; charset=utf-8'});
                 res.write('<h1>File upload</h1>');
                 res.end(result);
             });
             break;
+        }
+        case path === '/formparameter': {
+            let result = '';
+            req.on('data', (data) => {result += data;});
+            req.on('end', () => {
+                result += '<br/>';
+                let o = qs.parse(result);
+                for (let key in o) {
+                    result += `${key} = ${o[key]}<br/>`;
+                }
+                res.writeHead(200, {'Content-Type': 'text/html; charset=utf-8'});
+                res.write('<h1>Parameters: </h1>');
+                res.end(result);
+            });
+        }
+        case path === '/json' && Json.isJsonContentType(req.headers): {
+            let result = '';
+            req.on('data', (data) => {result += data;});
+            req.on('end', () => {
+                try {
+                    let obj = JSON.parse(result);
+                    console.log(obj);
+                    if (Json.isJsonContentType(req.headers)) {
+                        Json.write200(res, 'json ok', crJs.createResp(obj));
+                    } else {
+                        Json.write400(res, 'no accept');
+                    }
+                } catch (e) {
+                    Json.write400(res, 'catch: bad json');
+                }
+            });
+        }
+        case path === '/xml'&& XML.isXMLContentType(req.headers): {
+            let result = '';
+            req.on('data', (data) => {result += data;});
+            req.on('end', () => {
+                parseString(result, (err, data) => {
+                   if (err) {
+                       XML.write400(res, 'xml parse error');
+                   } else {
+                       XML.write200(res, 'ok xml', crXML.calc(data));
+                   }
+                });
+            });
+        }
     }
 };
 
